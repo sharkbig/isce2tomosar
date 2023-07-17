@@ -27,11 +27,17 @@ def loadStack(stack,verbose=False,key=None):
     
     return ds 
 
-def loadGeom(geomFolder,product='los.rdr'):
+def loadGeom(geomFolder,product='los.rdr',subset=[]):
+    
     losPath=os.path.join(geomFolder,product)
     los=gdal.Open(losPath)
     band=los.GetRasterBand(1)
-    return band.ReadAsArray()
+
+    if len(subset) == 4:
+        p,q,m,n=subset
+    else:
+        p,q,m,n=0,los.RasterYSize,0,los.RasterYSize
+    return band.ReadAsArray()[p:q,m:n]
 
 def loadBperp(bperpFolder):
     dateList=sorted(glob.glob(bperpFolder+'/*/20??????'))
