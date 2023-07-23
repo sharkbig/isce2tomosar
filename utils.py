@@ -18,17 +18,36 @@ def loadTif(file):
     lat=np.linspace(gt[3],gt[3]+gt[5]*dat.RasterYSize,dat.RasterYSize)
     return dat,lon,lat
 
-def loadStack(stack,verbose=False,key=None):
-    ds=h5py.File(stack)
+def loadStack(stack,subset=[],verbose=False,key='slc'):
+    ds=h5py.File(stack)    
     if verbose:
         print(ds.keys())
-    if key:
-        return stack[key]
+    data=ds['slc']
+    nslc=int(data.shape[0]/2)
+    ny=data.shape[1]
+    nx=data.shape[2]
+    if len(subset) == 0:
+        p,q,m,n=0,ny,0,nx
+    else:
+        p,q,m,n=subset
+    real=data[0:nslc,p:q,m:n]
+    imag=data[nslc:2*nslc,p:q,m:n]
+
+    return real,imag
+
+def subsetDataset(data,subset,axis=0):
+    p,q,m,n=subset
+    if data.ndim==2:
+        return data[p:q,m:n]
+    if axis==0:
+        return data[:,p:q,m:n]
+    elif axis==-1:
+        return data[p:q,m:n,:]
+    else:
+        raise ValueError("axis must be 0 or -1")
     
-    return ds 
 
 def loadGeom(geomFolder,product='los.rdr',subset=[]):
-    
     losPath=os.path.join(geomFolder,product)
     los=gdal.Open(losPath)
     band=los.GetRasterBand(1)
@@ -37,6 +56,7 @@ def loadGeom(geomFolder,product='los.rdr',subset=[]):
         p,q,m,n=subset
     else:
         p,q,m,n=0,los.RasterYSize,0,los.RasterYSize
+
     return band.ReadAsArray()[p:q,m:n]
 
 def loadBperp(bperpFolder):
@@ -53,12 +73,14 @@ def loadBperp(bperpFolder):
 
 
 def calcSR(inc,H=600e3):
-	avgInc=3.14-inc
-	Re=6371e3
-	b=-2*Re*np.cos(avgInc)
-	c=-(2*Re*H+H**2)
-	SR=(-b+(b**2-4*c)**0.5)/2
-	return SR
+    if inc>3.14:
+        print('Warning: the unit of incident angle should be in radians')
+    avgInc=3.14-inc
+    Re=6371e3
+    b=-2*Re*np.cos(avgInc)
+    c=-(2*Re*H+H**2)
+    SR=(-b+(b**2-4*c)**0.5)/2
+    return SR
 
 def da(slcStack):
     amp=np.abs(slcStack)
