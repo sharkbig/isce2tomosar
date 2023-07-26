@@ -55,7 +55,7 @@ def loadGeom(geomFolder,product='los.rdr',subset=[]):
     if len(subset) == 4:
         p,q,m,n=subset
     else:
-        p,q,m,n=0,los.RasterYSize,0,los.RasterYSize
+        p,q,m,n=0,los.RasterYSize,0,los.RasterXSize
 
     return band.ReadAsArray()[p:q,m:n]
 
@@ -99,9 +99,10 @@ def exportPointHeight(tomo,lon,lat,trial,powerThreshold,dmask,outName='maxOutput
     np.savetxt(outName,np.c_[lon,lat,h])
     
 
-
-
-def pointSample(lon,lat,radarLon,radarLat):
-    
-    return
+def baselineInverval(bperp):
+    db=-np.inf
+    sortB=sorted(bperp) 
+    for i in range(len(bperp)-1):
+        db=max(db,sortB[i+1]-sortB[i])
+    return db
 
