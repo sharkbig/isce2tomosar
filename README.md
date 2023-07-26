@@ -18,10 +18,10 @@ paramter in tomoInversion.py
 
 # python package needed
 ```
-osgeo
+gdal
 h5py
 scipy
 numpy
 matplotlib
-
+cupy
 ```
