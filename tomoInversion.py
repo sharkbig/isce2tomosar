@@ -4,15 +4,15 @@ import utils
 import matplotlib.pyplot as plt
 import os
 import h5py
-from scipy.linalg import lstsq,inv
+# from scipy.linalg import lstsq,inv
 
 # projection information
 projectFolder='/RUNDATA_16804/junyan1998/Chehualin/H4-10/crop_H4-10'
 stackName='microStack.h5'
-subset=[1800,2400,3800,4100] #[row_start,row_end,col_start,col_end]
+subset=[1700,2400,3800,4150] #[row_start,row_end,col_start,col_end]
 subsetStack=1
 overwriteStack=0
-
+dS=5
 # satelite information
 wavelen=0.031
 H=620e3  
@@ -43,7 +43,7 @@ print('Loading stack dataset\n')
 if subsetStack:
     real,imag=utils.loadStack(stackName)
 else:
-    real,imag=utils.loadStack(stackNmae,subset)
+    real,imag=utils.loadStack(stackName,subset)
 
 
 # load baselines 
@@ -83,14 +83,12 @@ incAve=np.average(inc)*3.14/180
 r0=utils.calcSR(incAve,H)
 
 # calculate baseline aperture 
-dS=wavelen*r0/2/(np.max(bperp)-np.min(bperp))
-db=np.abs(bperp[0]-bperp[1])
-sortB=sorted(bperp[1:]) 
-for i in range(nslc-1):
-    if db< sortB[i]-sortB[i-1]:
-        db=sortB[i]-sortB[i-1]
-Srange=wavelen*r0/2/db
-
+deltaS=wavelen*r0/2/(np.max(bperp)-np.min(bperp))
+dS=min(dS,deltaS)
+db=utils.baselineInverval(bperp)
+# Srange=wavelen*r0/2/db
+Srange=80
+print(Srange,dS)
 trial=np.arange(-Srange/2,Srange/2,dS).reshape([1,-1])
 ntrial=trial.shape[1]
 
@@ -103,49 +101,17 @@ steeringH=np.conj(steering.T)
 
 
 # start inversion
-da=np.empty(shape=(lns,width))
 
 
 print('start inversion ... ')
-tomography=np.empty(shape=(lns,width,ntrial))
-
-
+# tomography=np.empty(shape=(lns,width,ntrial))
 win=3
-for j in range(lns):
-    for i in range(width):
-        j0=max(0,int(j-win/2))
-        j1=min(lns,int(j+win/2))
-        i0=max(0,int(i-win/2))
-        i1=min(width,int(i+win/2))
-        
-        # multilook and normalization
-        cpx=real[:,j0:j1,i0:i1]+1j*imag[:,j0:j1,i0:i1]
-        cpx=np.average(np.average(cpx,axis=1),axis=1)
-        norm=np.max(np.abs(cpx))
-        cpx=cpx/norm
-        cpx=cpx.reshape(-1,1)
-        
-        da[j,i]=utils.da(cpx)
-        
-        
-        # calculate covariance matrix
-        cpxH=np.conj(cpx.T)
-        cov=np.dot(cpx,cpxH)/nslc
-        
-        load_factor=0.01
-        cov+=np.eye(nslc)*load_factor
-
-        try:
-            invCov=inv(cov)
-        except:
-            tomography[j,i,:]=np.nan    
-            continue
-        denominator=np.dot(np.dot(steeringH,invCov),steering)
-        # denominator=np.array([np.diag(denominator)]*nslc,dtype=np.complex64)
-        # weight=np.dot(invCov,steering)/denominator
-        # wH=np.conj(weight.T)
-        # power=np.dot(np.dot(wH,cov),weight)
-        tomography[j,i,:]=np.diag(1/denominator.real)
+from gpuInversion import gpuBFinversion, gpu_moving_average_2d
+import cupy
+cpx=real+1j*imag
+gaussian=gpu_moving_average_2d(cpx,5,nslc)
+tomography=gpuBFinversion(gaussian,steering)
+da=utils.da(cupy.asnumpy(gaussian))
 
 
 # verify result 
@@ -157,7 +123,8 @@ utils.exportPointHeight(tomography,lon,lat,trial.flatten(),0,da<0.4,'H1')
 
 for testLine in range(0,real.shape[1],10):
     # plt.subplot(211)
-    plt.imshow(tomography[testLine,:,::-1].T,cmap='rainbow')
+    plt.figure(figsize=(10,4))
+    plt.pcolor(tomography[testLine,...].T,cmap='rainbow')
     plt.colorbar(orientation='horizontal')
     # plt.subplot(212)
     # plt.plot(inten[testLine,:])
