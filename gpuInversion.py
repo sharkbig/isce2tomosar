@@ -2,7 +2,13 @@ import cupy as cp
 import numpy as np
 from cupyx.scipy import signal
 import scipy
-
+from sklearn.linear_model import Lasso
+def da_gpu(slcStack):
+    amp=cp.abs(slcStack)
+    std=cp.std(amp,axis=0)
+    ave=cp.average(amp,axis=0)
+    da=std/ave
+    return da
 
 def gpu_moving_average_2d(arr_cpu, window_size,patch):
     """
@@ -83,7 +89,7 @@ def BFinversion(cpxArray,steering):
 
 
 
-
+#### original code 
 # for j in range(lns):
 #     for i in range(width):
 #         j0=max(0,int(j-win/2))
