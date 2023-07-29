@@ -1,8 +1,8 @@
 import cupy as cp
 import numpy as np
 from cupyx.scipy import signal
-import scipy
-from sklearn.linear_model import Lasso
+
+
 def da_gpu(slcStack):
     amp=cp.abs(slcStack)
     std=cp.std(amp,axis=0)
@@ -52,7 +52,7 @@ def gpuBFinversion(cpxGpu,steering):
     steeringGpu=cp.asarray(steering)
 
     cov=cp.einsum('ijk,ilk->ijl',cpxGpu,cp.conj(cpxGpu))
-    cov+=cp.eye(patch)
+    cov+=cp.eye(patch)*0.01
 
     covI=cp.linalg.inv(cov)
     power=cp.einsum('jl,ijk->ilk',cp.conj(steeringGpu),covI)
