@@ -3,21 +3,25 @@ import numpy as np
 import utils
 import matplotlib.pyplot as plt
 import os
-import h5py
-# from scipy.linalg import lstsq,inv
+from gpuInversion import *
+import cupy
+
+
 
 # projection information
 projectFolder='/RUNDATA_16804/junyan1998/Chehualin/H4-10/crop_H4-10'
 stackName='microStack.h5'
-subset=[1700,2400,3800,4150] #[row_start,row_end,col_start,col_end]
+subset=[2000,2300,3800,4050] #[row_start,row_end,col_start,col_end]
 subsetStack=1
 overwriteStack=0
-dS=5
+dS=3
 # satelite information
 wavelen=0.031
-H=620e3  
+H=620e3 
+win=5
 
-###############
+
+##########################################
 
 geomFolder=os.path.join(projectFolder,'geom_reference')
 bperpFolder=os.path.join(projectFolder,'baselines')
@@ -66,11 +70,11 @@ width=real.shape[2]
 
 
 # use the differential phase instead 
-masterIx=int(nslc/2)
+masterIx=np.argsort(bperp)[int(nslc/2)]
 realRef=real[masterIx,...]
 imagRef=imag[masterIx,...]
 _real=realRef*real+imagRef*imag
-_imag=-real*imagRef+imag*realRef
+_imag=real*imagRef-imag*realRef
 real=_real
 imag=_imag
 bperp=bperp-bperp[masterIx]
@@ -85,8 +89,9 @@ r0=utils.calcSR(incAve,H)
 # calculate baseline aperture 
 deltaS=wavelen*r0/2/(np.max(bperp)-np.min(bperp))
 dS=min(dS,deltaS)
-db=utils.baselineInverval(bperp)
-# Srange=wavelen*r0/2/db
+# db=utils.baselineInverval(bperp)
+# db=np.std(bperp)
+# Srange=wavelen*r0/4/3.14/(nslc*20)**0.5/db
 Srange=80
 print(Srange,dS)
 trial=np.arange(-Srange/2,Srange/2,dS).reshape([1,-1])
@@ -100,26 +105,59 @@ steering=np.exp(steering*(1j)*4*3.14/wavelen/r0)
 steeringH=np.conj(steering.T)
 
 
-# start inversion
-
-
-print('start inversion ... ')
-# tomography=np.empty(shape=(lns,width,ntrial))
-win=3
-from gpuInversion import gpuBFinversion, gpu_moving_average_2d
-import cupy
+# normalize observation 
 cpx=real+1j*imag
-gaussian=gpu_moving_average_2d(cpx,5,nslc)
-tomography=gpuBFinversion(gaussian,steering)
-da=utils.da(cupy.asnumpy(gaussian))
+gaussian=gpu_moving_average_2d(cpx,3,nslc)
+da=cupy.asnumpy(da_gpu(gaussian))
 
 
+# start inversion
+print('start inversion ... ')
+
+# method 1: mvdr beamforming
+# tomography=gpuBFinversion(gaussian,steering)
+
+
+# method 2: svd beamforming
+
+# import svdBF 
+# gaussian=gaussian.get().reshape(nslc,-1)
+# tomography=svdBF.svdBF(gaussian,steering,1)
+# tomography=tomography.reshape(lns,width,ntrial).real
+
+
+# method 3: Compressive sensing method
+
+from CSInversion import cs_omp
+gaussian=gaussian.reshape(nslc,-1).get()
+tomography=np.empty(shape=(lns*width,ntrial),dtype=np.complex64)
+for i in range(lns*width):
+    tomography[i,:]=cs_omp(gaussian[:,i].T,steering)
+    if i% 1000==0: print(f'invert {i}/{lns*width} pixels',end='\r')
+print()
+tomography=np.abs(tomography.reshape(lns,width,ntrial))
+
+
+#################################3
 # verify result 
+
 print('result output')
 inten=np.log(np.average((real**2+real**2)**0.5,axis=0))
 utils.exportPointHeight(tomography,lon,lat,trial.flatten(),0,da<0.4,'H1')
 
-# dsm,lon,lat=utils.loadTif('dsmVerify.tif')
+
+plt.subplot(121)
+output=trial[0,np.argmax(tomography,axis=2)]*np.sin(np.radians(incAve))
+output[da>0.8]=np.nan
+plt.imshow(output,cmap='jet')
+# plt.imshow(np.argmax(tomography,axis=2),cmap='jet')
+plt.colorbar()
+plt.subplot(122)
+plt.imshow(inten)
+plt.savefig('csinverse/aveInt02')
+plt.close()
+
+
 
 for testLine in range(0,real.shape[1],10):
     # plt.subplot(211)
@@ -129,16 +167,7 @@ for testLine in range(0,real.shape[1],10):
     # plt.subplot(212)
     # plt.plot(inten[testLine,:])
 
-    plt.savefig(f'testImage/profile{testLine}')
+    plt.savefig(f'csinverse/profile{testLine}')
     plt.close()
 
 
-plt.subplot(121)
-output=trial[0,np.argmax(tomography,axis=2)]*np.sin(np.radians(incAve))
-output[da>0.6]=np.nan
-plt.imshow(output,cmap='jet')
-# plt.imshow(np.argmax(tomography,axis=2),cmap='jet')
-plt.colorbar()
-plt.subplot(122)
-plt.imshow(inten)
-plt.savefig('testImage/aveInt02')
