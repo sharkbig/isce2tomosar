@@ -115,7 +115,7 @@ da=cupy.asnumpy(da_gpu(gaussian))
 print('start inversion ... ')
 
 # method 1: mvdr beamforming
-# tomography=gpuBFinversion(gaussian,steering)
+tomography=gpuBFinversion(gaussian,steering)
 
 
 # method 2: svd beamforming
@@ -128,45 +128,41 @@ print('start inversion ... ')
 
 # method 3: Compressive sensing method
 
-from CSInversion import cs_omp
-gaussian=gaussian.reshape(nslc,-1).get()
-tomography=np.empty(shape=(lns*width,ntrial),dtype=np.complex64)
-for i in range(lns*width):
-    tomography[i,:]=cs_omp(gaussian[:,i].T,steering)
-    if i% 1000==0: print(f'invert {i}/{lns*width} pixels',end='\r')
-print()
-tomography=np.abs(tomography.reshape(lns,width,ntrial))
+# from CSInversion import cs_omp
+# gaussian=gaussian.reshape(nslc,-1).get()
+# tomography=np.empty(shape=(lns*width,ntrial),dtype=np.complex64)
+# for i in range(lns*width):
+#     tomography[i,:]=cs_omp(gaussian[:,i].T,steering)
+#     if i% 1000==0: print(f'invert {i}/{lns*width} pixels',end='\r')
+# print()
+# tomography=np.abs(tomography.reshape(lns,width,ntrial))
 
 
 #################################3
 # verify result 
 
 print('result output')
-inten=np.log(np.average((real**2+real**2)**0.5,axis=0))
-utils.exportPointHeight(tomography,lon,lat,trial.flatten(),0,da<0.4,'H1')
+inten=np.log(np.average((real**2+imag**2)**0.5,axis=0))
+output=trial[0,np.argmax(tomography,axis=2)]*np.sin(incAve)
+output[da>0.6]=np.nan
+utils.exportPointHeight(output,lon,lat)
 
 
 plt.subplot(121)
-output=trial[0,np.argmax(tomography,axis=2)]*np.sin(np.radians(incAve))
-output[da>0.8]=np.nan
 plt.imshow(output,cmap='jet')
-# plt.imshow(np.argmax(tomography,axis=2),cmap='jet')
-plt.colorbar()
+plt.colorbar(orientation= "horizontal")
 plt.subplot(122)
-plt.imshow(inten)
+plt.imshow(inten,cmap="gray")
+plt.colorbar(orientation= "horizontal")
 plt.savefig('csinverse/aveInt02')
 plt.close()
 
 
 
 for testLine in range(0,real.shape[1],10):
-    # plt.subplot(211)
     plt.figure(figsize=(10,4))
     plt.pcolor(tomography[testLine,...].T,cmap='rainbow')
     plt.colorbar(orientation='horizontal')
-    # plt.subplot(212)
-    # plt.plot(inten[testLine,:])
-
     plt.savefig(f'csinverse/profile{testLine}')
     plt.close()
 
