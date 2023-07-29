@@ -15,7 +15,7 @@ def loadTif(file):
     band=dat.GetRasterBand(1)
     gt=dat.GetGeoTransform()
     lon=np.linspace(gt[0],gt[0]+gt[1]*dat.RasterXSize,dat.RasterXSize)
-    lat=np.linspace(gt[3],gt[3]+gt[5]*dat.RasterYSize,dat.RasterYSize)
+    lat=np.linspace(gt[3],gt[3]+gt[5]*dat.RasterXSize,dat.RasterYSize)
     return dat,lon,lat
 
 def loadStack(stack,subset=[],verbose=False,key='slc'):
