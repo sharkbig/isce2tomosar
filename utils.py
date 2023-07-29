@@ -89,13 +89,11 @@ def da(slcStack):
     da=std/ave
     return da
 
-def exportPointHeight(tomo,lon,lat,trial,powerThreshold,dmask,outName='maxOutput'):
-    tmask=np.max(tomo,axis=2)>powerThreshold
-    mask=dmask*tmask
-    h=trial[np.argmax(tomo,axis=2)]
-    h=h[mask]
-    lon=lon[mask]
-    lat=lat[mask]
+def exportPointHeight(tomo,lon,lat,outName='maxOutput'):
+    nanmask=~np.isnan(tomo)
+    h=tomo[nanmask]
+    lon=lon[nanmask]
+    lat=lat[nanmask]
     np.savetxt(outName,np.c_[lon,lat,h])
     
 
