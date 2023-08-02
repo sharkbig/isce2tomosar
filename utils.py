@@ -18,22 +18,7 @@ def loadTif(file):
     lat=np.linspace(gt[3],gt[3]+gt[5]*dat.RasterXSize,dat.RasterYSize)
     return dat,lon,lat
 
-def loadStack(stack,subset=[],verbose=False,key='slc'):
-    ds=h5py.File(stack)    
-    if verbose:
-        print(ds.keys())
-    data=ds['slc']
-    nslc=int(data.shape[0]/2)
-    ny=data.shape[1]
-    nx=data.shape[2]
-    if len(subset) == 0:
-        p,q,m,n=0,ny,0,nx
-    else:
-        p,q,m,n=subset
-    real=data[0:nslc,p:q,m:n]
-    imag=data[nslc:2*nslc,p:q,m:n]
 
-    return real,imag
 
 def subsetDataset(data,subset,axis=0):
     p,q,m,n=subset
@@ -47,10 +32,10 @@ def subsetDataset(data,subset,axis=0):
         raise ValueError("axis must be 0 or -1")
     
 
-def loadGeom(geomFolder,product='los.rdr',subset=[]):
+def loadGeom(geomFolder,product='los.rdr',subset=[],band=1):
     losPath=os.path.join(geomFolder,product)
     los=gdal.Open(losPath)
-    band=los.GetRasterBand(1)
+    band=los.GetRasterBand(band)
 
     if len(subset) == 4:
         p,q,m,n=subset
