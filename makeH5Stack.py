@@ -1,9 +1,11 @@
 import h5py
 import glob
-from utils import loadSLC
-import numpy as np 
-def makeSLCStack(slcFolder,h5Name,subset=[]):
-    dates=sorted(glob.glob(slcFolder+'/20*/*.slc'))
+from utils import loadSLC,loadGeom
+import numpy as np
+
+
+def makeSLCStack(slcFolder,h5Name,subset=[],suffix='.slc'):
+    dates=sorted(glob.glob(slcFolder+'/20*/*'+suffix))
     print(dates)
     
     _,x,y=loadSLC(dates[0])
@@ -41,3 +43,52 @@ def makeSLCStack(slcFolder,h5Name,subset=[]):
         ds=None 
         print('slc process:',dates[i])
     
+def makeGeomStack(geomFolder,h5Name='geom.h5',subset=[],suffix='.rdr'):
+    lon=loadGeom(geomFolder,'lon.rdr',subset)
+    lat=loadGeom(geomFolder,'lat.rdr',subset)
+    inc=loadGeom(geomFolder,'los.rdr',subset,band=1)
+    
+    ysize,xsize=lon.shape
+
+    ds=h5py.File(h5Name,'w')
+    lonLayer=ds.create_dataset('lon',(ysize,xsize),chunks=(ysize,xsize))
+    latLayer=ds.create_dataset('lat',(ysize,xsize),chunks=(ysize,xsize))
+    incLayer=ds.create_dataset('inc',(ysize,xsize),chunks=(ysize,xsize))
+
+    lonLayer[...]=lon
+    latLayer[...]=lat  
+    incLayer[...]=inc
+    ds.close()
+
+def loadSLCStack(stack,subset=[],verbose=False,key='slc'):
+    ds=h5py.File(stack)    
+    if verbose:
+        print(ds.keys())
+    data=ds[key]
+    nslc=int(data.shape[0]/2)
+    ny=data.shape[1]
+    nx=data.shape[2]
+    if len(subset) == 0:
+        p,q,m,n=0,ny,0,nx
+    else:
+        p,q,m,n=subset
+    real=data[0:nslc,p:q,m:n]
+    imag=data[nslc:2*nslc,p:q,m:n]
+
+    return real,imag
+
+def loadGeomStack(stack,key,subset=[],verbose=False):
+    ds=h5py.File(stack)    
+    if verbose:
+        print(ds.keys())
+    data=ds[key]
+    ny,nx =data.shape
+
+    if len(subset) == 0:
+        p,q,m,n=0,ny,0,nx
+    else:
+        p,q,m,n=subset
+    data=data[p:q,m:n]
+    ds.close()    
+
+    return data
