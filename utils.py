@@ -3,6 +3,7 @@ import h5py
 import os
 import glob 
 import numpy as np
+from datetime import datetime
 
 def loadSLC(file):
     dat=gdal.Open(file)
@@ -67,12 +68,6 @@ def calcSR(inc,H=600e3):
     SR=(-b+(b**2-4*c)**0.5)/2
     return SR
 
-def da(slcStack):
-    amp=np.abs(slcStack)
-    std=np.std(amp,axis=0)
-    ave=np.average(amp,axis=0)
-    da=std/ave
-    return da
 
 def exportPointHeight(tomo,lon,lat,outName='maxOutput'):
     nanmask=~np.isnan(tomo)
@@ -89,3 +84,12 @@ def baselineInverval(bperp):
         db=max(db,sortB[i+1]-sortB[i])
     return db
 
+def temporalBaseline(slcFolder,refIx=0):
+    date=sorted(os.listdir(slcFolder))
+    refdate=datetime.strptime(date[refIx],'%Y%m%d')
+    tbl=np.zeros(shape=len(date),dtype=int)
+    ix=0
+    for i in date:
+        tbl[ix]=(datetime.strptime(i,'%Y%m%d')-refdate).days
+        ix+=1
+    return tbl
