@@ -32,7 +32,7 @@ def cs_omp(signal,T_mat):
         # aug_x=np.dot(np.linalg.pinv(local_T),signal)
         aug_x=scp.linalg.lstsq(local_T,signal)[0]
         r=signal-np.dot(local_T,aug_x)
-        if np.max(np.abs(r))<1e-6: break
+        if np.max(np.abs(r))<1e-3: break
     hat_x[posArr]=aug_x
     return hat_x
 
