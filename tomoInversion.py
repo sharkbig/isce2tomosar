@@ -1,7 +1,6 @@
 #!/bin/env python
 import numpy as np
 import utils
-from utils import cdot 
 import matplotlib.pyplot as plt
 import os
 from gpuInversion import *
@@ -15,11 +14,11 @@ stackName='microStack.h5'
 subset=[1800,2300,3800,4050] #[row_start,row_end,col_start,col_end]
 subsetStack=1
 overwriteStack=0
-dS=5
+dS=1
 # satelite information
 wavelen=0.031
 H=620e3
-win=5
+win=4
 
 
 ##########################################
@@ -81,16 +80,11 @@ lns=real.shape[1]
 width=real.shape[2]
 
 
-# use the differential phase instead 
+# phase difference
+cpx=real+1j*imag
 masterIx=np.argsort(bperp)[int(nslc/2)]
-realRef=real[masterIx,...]
-imagRef=imag[masterIx,...]
-_real=realRef*real+imagRef*imag
-_imag=real*imagRef-imag*realRef
-real=_real
-imag=_imag
+cpx=cpx*cpx[masterIx].conj()/np.abs(cpx[masterIx])
 bperp=bperp-bperp[masterIx]
-del imagRef, realRef, _real, _imag
 
 
 
@@ -100,7 +94,7 @@ dS=min(dS,deltaS/2)
 # db=utils.baselineInverval(bperp)
 # db=np.std(bperp)
 # Srange=wavelen*r0/4/3.14/(nslc*20)**0.5/db
-Srange=60
+Srange=20
 print(Srange,dS)
 trial=np.arange(-Srange/2,Srange/2,dS).reshape([1,-1])
 ntrial=trial.shape[1]
@@ -115,27 +109,47 @@ steeringH=np.conj(steering.T)
 
 # normalize observation 
 print('apply filter')
-cpx=real+1j*imag
-if win==1:
-    gaussian=cpx
-else: 
-    gaussian=gpu_moving_average_2d(cpx,win,nslc)
 
-da=cp.asnumpy(da_gpu(gaussian))
+# if win==1:
+#     gaussian=cpx
+# else: 
+#     gaussian=gpu_moving_average_2d(cpx,win)
+# da=cp.asnumpy(da_gpu(gaussian))
+
+from skimage.restoration import denoise_nl_means,estimate_sigma
+phase=np.angle(cpx)
+amp=np.abs(cpx)
+print(phase.shape)
+
+sig_est=np.nanmean(estimate_sigma(phase,channel_axis=0))
+gaussian=denoise_nl_means(phase,
+                          h=sig_est*1.15,
+                          fast_mode=True,
+                          channel_axis=0,
+                          patch_size=win,
+                          patch_distance=win//2)
+
+gaussian=amp*np.exp(1j*gaussian)
+da=da(gaussian)
+
+
+
+
+
+
 
 
 # start inversion
 print('start inversion ... ')
 
 ### method 1: mvdr beamforming (on GPU)
-
+gaussian=cp.asarray(gaussian)
 tomography=gpuBFinversion(gaussian,steering)
-k=cp.argmax(tomography,axis=2)
-s_gpu=cp.asarray(steering)
 
 # calculate coherence
-sig=cp.angle(gaussian)
-sig=cp.exp(1j*sig)
+k=cp.argmax(tomography,axis=2)
+s_gpu=cp.asarray(steering)
+sig=cp.exp(1j*cp.angle(gaussian))
 L_g=np.einsum('ij,jkl->ikl',s_gpu.conj().T,sig)
 L_k=np.einsum('ij,jkl->ikl',s_gpu.conj().T,s_gpu[:,k])
 coh=cp.sum(L_g*L_k.conj(),axis=0)/  \
@@ -181,7 +195,7 @@ tomography=tomography.get().real
 
 # verify result 
 print('result output')
-inten=np.log(np.average((real**2+imag**2)**0.5,axis=0))
+inten=np.log(np.average(np.abs(gaussian.get()),axis=0))
 output=trial[0,np.argmax(tomography,axis=2)]*np.sin(incAve)
 
 output[coh<0.6]=np.nan
